@@ -45,6 +45,8 @@ Thumbs.db
 !affex
 !affex/*
 affex/__pycache__
+!screenshot.gif
+
 
 
 
