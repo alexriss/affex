@@ -1,0 +1,277 @@
+<StackMovieScreen>:
+    size: 1200,400
+    canvas.before:
+        Color:
+            rgba: 0 , 0, 0, 1
+        Rectangle:
+            size: self.size
+            pos: self.pos
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.size        
+        Label:
+            size_hint_y: None
+            text: 'Align frames in a movie'
+            font_size: sp(24)
+            bold: True
+            height: sp(40)
+        BoxLayout:
+            size_hint_y: None
+            height: sp(100)
+            BoxLayout:
+                orientation: 'vertical'
+                Slider:
+                    id: first
+                    min: 0
+                    max: 100
+                Label:
+                    text: 'Start at {:.3f}%'.format(first.value)
+            BoxLayout:
+                orientation: 'vertical'
+                Slider:
+                    id: last
+                    min: 0
+                    max: 100
+                    value: 100
+                Label:
+                    text: 'End at {:.3f}%'.format(last.value)
+            BoxLayout:
+                orientation: 'vertical'
+                Slider:
+                    id: frame_step
+                    min: 1
+                    max: 50
+                    value: 1
+                Label:
+                    text: 'Every {} frame'.format(root.helper.get_ordinal(frame_step.value))
+
+        BoxLayout:
+            size_hint_y: None
+            height: sp(100)
+            BoxLayout:
+                orientation: 'vertical'
+                CheckBox:
+                    id: align
+                    active: True
+                Label:
+                    text: 'Align each frame'
+            BoxLayout:
+                orientation: 'vertical'
+                DropButAlignMethod:
+                    id: dropbut_align_method
+                Label:
+                    text: 'Align method'
+
+            BoxLayout:
+                orientation: 'vertical'
+                DropButAlignWarpMode:
+                    id: dropbut_align_warp_mode
+                Label:
+                    text: 'Warp mode'
+        #VideoPlayer:
+        #    #size_hint_y: None
+        #    #height:sp(500)
+        #    id: video_player_main
+        #    play: False
+        #    source: 'stable_video.mp4'
+        KivyCV:
+            id: image_video_player
+            allow_stretch: True
+            on_touch_move: self._on_touch_move(*args)
+            on_touch_down: self._on_touch_down(*args)
+            
+        BoxLayout:
+            size_hint_y: None
+            height: sp(50)
+            Button:
+                id: video_player_stretch
+                size_hint_x: None
+                width: sp(40)
+                text: '[]'
+                on_press: image_video_player.allow_stretch = not image_video_player.allow_stretch
+            Button:
+                id: video_player_play
+                size_hint_x: None
+                width: sp(40)
+                text: '>'
+                on_press: root._video_player_play()
+            Button:
+                id: video_player_pause
+                size_hint_x: None
+                width: sp(40)
+                text: '||'
+                on_press: root._video_player_pause()
+            Slider:
+                id: video_slider
+                min: 0
+                max: 100
+                value: 0
+                on_touch_down: image_video_player.stop_updating()
+                    
+            Button:
+                size_hint_x: None
+                width: sp(100)
+                text: 'Set start'
+                on_press: first.value = 100*video_slider.value/video_slider.max
+            Button:
+                size_hint_x: None
+                width: sp(100)
+                text: 'Set end'
+                on_press: last.value = 100*video_slider.value/video_slider.max
+                
+        BoxLayout:
+            size_hint_y: None
+            height: sp(10)
+              
+        BoxLayout:
+            size_hint_y: None
+            height: sp(50)
+            Button:
+                id: button_process
+                text: 'Process!'
+                disabled: True
+                on_press: root.stack_movie()
+            Button:
+                size_hint_x: None
+                id: button_previous_result
+                width: sp(100)
+                text: 'Results>'
+                disabled: True
+                on_press:
+                    root.manager.transition.direction = 'left'
+                    root.manager.transition.duration: 0.5
+                    root.manager.current = 'result_screen'
+                    
+<ResultScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        size: root.size        
+        BoxLayout:
+            orientation: 'vertical'        
+            Image:
+                id: image_result
+                allow_stretch: True
+            ProgressBar:
+                id: progressbar
+                size_hint_y: None
+                height: sp(50)
+                max: 1
+                value: 0
+            Label:
+                id: label_spacer
+                height: sp(250)
+                size_hint_y: None
+        BoxLayout:
+            size_hint_y: None
+            height: sp(70)
+            Button:
+                id: result_back
+                size_hint_x: None
+                width: sp(200)
+                text: '<Back'
+                on_press:
+                    root.manager.transition.direction = 'right'
+                    root.manager.transition.duration: 0.5
+                    root.manager.current = 'stack_movie_screen'
+            Label:
+                id: label_status
+                color: 1, 1, 1, 0.5
+            Button:
+                id: result_save
+                size_hint_x: None
+                width: sp(200)
+                disabled: True
+                text: 'Save'
+                on_press: root.save_image()
+
+                
+                
+<SaveDialog>:
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+        FileChooserListView:
+            id: filechooser
+            on_selection: text_input.text = self.selection and self.selection[0] or ''
+            filters: ['*.png', '*.jpg']
+        TextInput:
+            id: text_input
+            size_hint_y: None
+            height: 30
+            multiline: False
+        BoxLayout:
+            size_hint_y: None
+            height: 30
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+            Button:
+                text: "Save"
+                on_release: root.save(filechooser.path, text_input.text)
+
+                
+<LoadDialog>:
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+        FileChooserListView:
+            id: filechooser
+            on_selection: text_input.text = self.selection and self.selection[0] or ''
+        TextInput:
+            id: text_input
+            size_hint_y: None
+            height: 30
+            multiline: False
+        BoxLayout:
+            size_hint_y: None
+            height: 30
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+            Button:
+                text: "Load"
+                on_release: root.load(filechooser.path, text_input.text)
+                
+                
+<PopupFileExists>:
+    title: 'File exists'
+    size_hint: (None, None)
+    size: 400,300
+    BoxLayout:
+        orientation: "vertical"
+        Label:
+            id: label_text
+            text_size: self.size  # line breaks
+            halign: 'center'
+            valign: 'middle'
+        BoxLayout:
+            height:sp(50)
+            size_hint_y: None
+            Button:
+                text: 'Back'
+                on_release: app.result_screen.save_image_overwrite(False)
+            Button:
+                text: 'Overwrite'
+                on_release: app.result_screen.save_image_overwrite(True)
+                
+<PopupError>:
+    id: popup_error
+    title: 'Error'
+    auto_dismiss: True
+    size_hint: (None, None)
+    size: 400,300
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            id: label_error
+            text_size: self.size  # line breaks
+            halign: 'center'
+            valign: 'middle'            
+        Button:
+            height:sp(50)
+            size_hint_y: None
+            text: 'Back'
+            on_release: root.dismiss()
+
