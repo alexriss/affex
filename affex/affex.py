@@ -21,6 +21,25 @@ import sys
 
 from matplotlib import pylab as plt
 
+def getTotalFrames(capture):
+    """Get the total number of frames of a cv2 capture object."""
+    
+    totalFrames = capture.get(cv2.CAP_PROP_FRAME_COUNT)
+    if totalFrames > 0:
+        return totalFrames
+    return totalFrames  # we dont try to loop through all frames for now
+    # totalFrames = -1
+    # try:
+    #     capture.set(cv2.CAP_PROP_POS_FRAMES,0)
+    #     while True:
+    #         ret, _ = capture.read()
+    #         if ret==False: break
+    #         totalFrames += 1
+    #     capture.set(cv2.CAP_PROP_POS_FRAMES,0)            
+    # except:
+    #     pass
+    # return totalFrames
+
 
 class StackImages:
     """
@@ -112,16 +131,18 @@ def _get_first_last_frame(totalFrames, first, last):
     return firstFrame, lastFrame
 
     
-def stackMovie(video, first=0, last=0, frame_step=1, align=True, align_method='ECC', align_warp_mode='affine', process_info = {}):
+def stackMovie(video, first=0, last=0, frame_step=1, align=True, align_method='ECC', align_warp_mode='affine', output_float=False, process_info = {}):
     """Aligns and averages frames within a video files.
     Arguments:
-        video        : filename or opencv instance of the video to load
-        first        : fraction of the video where to start the stacking (between 0 and 1)
-        last         : fraction of the video where to end the stacking (between 0 and 1)
-        frame_step   : stack every n frames (default: 1, i.e. stack every frame)
-        align        : if True, all the frames will be aligned with the first frame
-        method       : method for feature mapping: ECC or ORB (default: ECC; it is slower but more accurate)
-        process_info : dictionary (optional). The 'out_progress' key holds a float that gets updated with the percentual progress (0 to 1). If 'in_stop' key is True, then the function will stop. 'out_ended' will be set to True at the end of execution.
+        video           : filename or opencv instance of the video to load
+        first           : fraction of the video where to start the stacking (between 0 and 1)
+        last            : fraction of the video where to end the stacking (between 0 and 1)
+        frame_step      : stack every n frames (default: 1, i.e. stack every frame)
+        align           : if True, all the frames will be aligned with the first frame
+        align_method    : method for feature mapping: ECC or ORB (default: ECC; it is slower but more accurate)
+        align_warp_mode : warp mode for mapping (for ECC)
+        output_float    : output float-type image (can then be converted into a 16 bit image)
+        process_info    : dictionary (optional). The 'out_progress' key holds a float that gets updated with the percentual progress (0 to 1). If 'in_stop' key is True, then the function will stop. 'out_ended' will be set to True at the end of execution.
     Returns:
         (stacked_image, first_image, last_image): the stacked, first and last images of the video in openCV image format"""
         
@@ -129,8 +150,8 @@ def stackMovie(video, first=0, last=0, frame_step=1, align=True, align_method='E
     if isinstance(video, cv2.VideoCapture):
         cap = video
     else:
-        cap = cv2.VideoCapture(video)
-    totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        cap = cv2.VideoCapture(video, cv2.CAP_FFMPEG)
+    totalFrames = getTotalFrames(cap)
     firstFrame, lastFrame = _get_first_last_frame(totalFrames, first, last)
     
     update_progress = False
@@ -165,7 +186,10 @@ def stackMovie(video, first=0, last=0, frame_step=1, align=True, align_method='E
                 if i % progress_every == 0:  # update progress every 10th frame
                     _print_progressbar(frame_number-firstFrame, lastFrame-firstFrame)
                     if use_temp_images:
-                        process_info['out_temp_images'] = (np.array(np.round(stacked_image*numFrames/(i+1)),dtype=np.uint8), first_image, image)
+                        if output_float:
+                            process_info['out_temp_images'] = (np.array(np.round(stacked_image*numFrames/(i+1)),dtype=np.uint8), first_image, image)
+                        else:
+                            process_info['out_temp_images'] = (stacked_image*numFrames/(i+1), first_image, image)
                     
             i+=1
             if update_progress:
@@ -177,7 +201,8 @@ def stackMovie(video, first=0, last=0, frame_step=1, align=True, align_method='E
                     
     _print_progressbar(1, 1)
     print('\nNumber of frames aligned and stacked: %s\n' % i)
-    stacked_image = np.array(np.round(stacked_image),dtype=np.uint8)
+    if not output_float:
+        stacked_image = np.array(np.round(stacked_image),dtype=np.uint8)
     
     process_info['out_ended'] = True
     return (stacked_image, first_image, image)     
@@ -209,8 +234,6 @@ def createVideoTrail(video, fname_video_out, output_format='MJPG', first=0, last
                             'out_progress': gets updated with the percentual progress (0 to 1).
                             'in_stop': If True, then the function will stop.
                             'out_ended': will be set to True at the end of execution.
-                            'in_use_temp_images': If True, then temporary images will be generated.
-                            'out_temp_images': the current stacked imaged, the first image and the last image, updated during the loop
     """
     
     if fname_video_out[-4:].lower()=='.gif':
@@ -225,10 +248,6 @@ def createVideoTrail(video, fname_video_out, output_format='MJPG', first=0, last
     update_progress = False
     if 'out_progress' in process_info or 'in_stop' in process_info:
         update_progress = True
-    use_temp_images = False
-    if 'in_use_temp_images' in process_info:
-        if process_info['in_use_temp_images']:
-            use_temp_images=True
 
     if not output_size is None:
         output_size_scale = False
@@ -241,11 +260,11 @@ def createVideoTrail(video, fname_video_out, output_format='MJPG', first=0, last
     if isinstance(video, cv2.VideoCapture):
         cap = video
     else:
-        cap = cv2.VideoCapture(video)
+        cap = cv2.VideoCapture(video, cv2.CAP_FFMPEG)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     if output_fps is None:
         output_fps = fps
-    totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    totalFrames = getTotalFrames(cap)
     firstFrame, lastFrame = _get_first_last_frame(totalFrames, first, last)
 
     if func_bwd is None:

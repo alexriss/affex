@@ -28,11 +28,11 @@ from kivy.graphics.texture import Texture
 from kivy.graphics import Line
 
 import cv2
+import numpy as np
 import threading
 import affex
 
 #os.environ['KIVY_VIDEO'] = 'ffpyplayer' #ffpyplayer'  # 'gstplayer'  # gstreamer should be installed
-
 
 
 
@@ -121,12 +121,14 @@ class StackMovieScreen(Screen):
         
     def load_file(self, filename):
         print('Loading: %s' % filename)
-        self.capture = cv2.VideoCapture(filename)
+        self.capture = cv2.VideoCapture(filename, cv2.CAP_FFMPEG)
         fps = self.capture.get(cv2.CAP_PROP_FPS)
         totalFrames = self.capture.get(cv2.CAP_PROP_FRAME_COUNT)
+        if fps>0 and totalFrames==-1.0:  # there seems to be a bug sometimes with getting the total number of frames
+            totalFrames = affex.getTotalFrames(self.capture)
         if fps>0 and totalFrames>1:
             self.ids.button_process.disabled = False
-            self.ids.image_video_player.init_update(capture=self.capture)
+            self.ids.image_video_player.init_update(capture=self.capture, totalFrames=totalFrames)
             self.capture_filename = filename
         else:
             self.unload_file()
@@ -210,12 +212,15 @@ class KivyCV(Image):
                     elif touch.button == 'scrollup':
                         self._slider_change(4*touch.psy)
         
-    def init_update(self, capture=None, **kwargs):
+    def init_update(self, capture=None, totalFrames=0, **kwargs):
         self.capture = capture
         if self.capture:
             try:
                 self.fps = self.capture.get(cv2.CAP_PROP_FPS)
-                self.total_frames = self.capture.get(cv2.CAP_PROP_FRAME_COUNT)
+                if totalFrames==0:
+                    self.total_frames = self.capture.get(cv2.CAP_PROP_FRAME_COUNT)
+                else:
+                    self.total_frames = totalFrames
                 self.current_frame = 0
                 app = self._get_app()
                 self.video_slider = app.stack_movie_screen.ids.video_slider
@@ -332,7 +337,7 @@ class ResultScreen(Screen):
         align_method = self.app.stack_movie_screen.ids.dropbut_align_method.text
         align_warp_mode = self.app.stack_movie_screen.ids.dropbut_align_warp_mode.text.lower()
         # get stacked image, first image, last image
-        self.images = affex.stackMovie(self.capture, first=first, last=last, frame_step=frame_step, align=align, align_method=align_method, align_warp_mode=align_warp_mode, process_info=self.process_info)
+        self.images = affex.stackMovie(self.capture, first=first, last=last, frame_step=frame_step, align=align, align_method=align_method, align_warp_mode=align_warp_mode, output_float=True, process_info=self.process_info)
         self.process_info['calculating'] = False
 
     def show_image(self, temporary=False):
@@ -344,11 +349,10 @@ class ResultScreen(Screen):
             else:
                 self.ids.label_status.text = 'Finished.'
         self.ids.label_spacer.height = '0sp'
-        self.ids.image_result.texture = frame_to_image(self.images[0])
+        self.ids.image_result.texture = frame_to_image(np.array(np.round(self.images[0]), dtype=np.uint8))
         self.ids.image_result.opacity = 1
         self.ids.result_save.disabled = False
         self.app.stack_movie_screen.ids.button_previous_result.disabled = False
-        
 
     def dismiss_popup_save(self):
         self.popup_save.dismiss()
@@ -361,7 +365,7 @@ class ResultScreen(Screen):
         
     def save_image_write(self):
         extension = os.path.splitext(self.save_filename)[1][1:]
-        if not extension in ['png', 'jpg']:
+        if not extension in ['png', 'jpg', 'tiff']:
             self.popup_save_error = PopupError()
             self.popup_save_error.ids.label_error.text = 'Unsupported extension: %s.' % extension
             self.popup_save_error.open()
@@ -371,7 +375,10 @@ class ResultScreen(Screen):
             self.popup_save_exists.open()
         else:
             print('Saving: %s' % self.save_filename)
-            cv2.imwrite(self.save_filename, self.images[0], [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            if extension == "png" or extension == "tiff":  # save 16 bit image
+                cv2.imwrite(self.save_filename, np.array(np.round(256*self.images[0]), dtype=np.uint16), [int(cv2.IMWRITE_PNG_COMPRESSION), 9])
+            else:
+                cv2.imwrite(self.save_filename, np.array(np.round(self.images[0]), dtype=np.uint8), [int(cv2.IMWRITE_JPEG_QUALITY), 90])
             if self.process_info['calculating']:
                 self.ids.label_status.text = 'calculating... (saved temporary result).'
             else:
@@ -390,7 +397,7 @@ class ResultScreen(Screen):
         dir = os.path.dirname(os.path.realpath(self.app.stack_movie_screen.capture_filename))
         content = SaveDialog(save=self.save_image_init, cancel=self.dismiss_popup_save)
         content.ids.filechooser.path = dir
-        content.ids.text_input.text = os.path.splitext(self.app.stack_movie_screen.capture_filename)[0]+'.jpg'
+        content.ids.text_input.text = os.path.splitext(self.app.stack_movie_screen.capture_filename)[0]+'.png'
         self.popup_save = Popup(title="Save image...", content=content, size_hint=(0.9, 0.9))
         self.popup_save.open()
         
@@ -473,7 +480,7 @@ class AffexApp(App):
             self.result_screen.ids.canvas_spacer.height = '0dp'
             self.result_screen.ids.progressbar.opacity = 0
 
-            capture = cv2.VideoCapture('2018-07-29 19.30.40.mp4')
+            capture = cv2.VideoCapture('2018-07-29 19.30.40.mp4', cv2.CAP_FFMPEG)
             ret, frame = capture.read()
             #self.images = affex.stackMovie(capture, first=0.5, last=0.6, frame_step=5, align=True, align_method='ECC', align_warp_mode='euclidean')
             #self.result_screen.ids.image_result.texture = frame_to_image(self.images[0])
