@@ -96,7 +96,7 @@ class StackImages:
         else:
             if self.method == 'ECC':
                 #s, self.M = cv2.findTransformECC(image_bw, self.first_image, self.M, cv2.MOTION_HOMOGRAPHY)  # Estimate perspective transform
-                s, self.M = cv2.findTransformECC(image_bw, self.first_image, self.M, self.warp_mode)  # Estimate affine transformation
+                s, self.M = cv2.findTransformECC(image_bw, self.first_image, self.M, self.warp_mode, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),  inputMask=None, gaussFiltSize=1)  # Estimate affine transformation
             elif self.method == 'ORB':
                 matches = matcher.match(self.first_des, des)
                 matches = sorted(matches, key=lambda x: x.distance)
