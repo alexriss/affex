@@ -1,5 +1,5 @@
 imageio==2.3.0
-numpy==1.15.1
+numpy==1.22.0
 kivy.deps.sdl2==0.1.18
 matplotlib==2.2.2
 kivy==1.10.1
